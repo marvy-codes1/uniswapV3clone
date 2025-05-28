@@ -44,7 +44,11 @@ contract UniswapV3Pool {
     // Amount of liquidity, L.
     uint128 public liquidity;
 
-
+    struct CallbackData {
+        address token0;
+        address token1;
+        address payer;
+    }
 
     // Ticks info
     mapping(int24 => Tick.Info) public ticks;
@@ -85,8 +89,7 @@ contract UniswapV3Pool {
         address owner,
         int24 lowerTick,
         int24 upperTick,
-        uint128 amount,
-        bytes calldata data 
+        uint128 amount
     ) external returns (uint256 amount0, uint256 amount1) {
         if (
         lowerTick >= upperTick ||
@@ -118,12 +121,12 @@ contract UniswapV3Pool {
 
             IUniswapV3MintCallback(msg.sender).uniswapV3MintCallback(
                 amount0,
-                amount1,
-                data
+                amount1
             );
 
         if (amount0 > 0 && balance0Before + amount0 > balance0())
             revert InsufficientInputAmount();
+
         if (amount1 > 0 && balance1Before + amount1 > balance1())
             revert InsufficientInputAmount();
         
@@ -134,13 +137,21 @@ contract UniswapV3Pool {
 
     
 
-    // helper functions
+    ////////////////////////////////////////////////////////////////////////////
+    //
+    // INTERNAL
+    //
+    ////////////////////////////////////////////////////////////////////////////
     function balance0() internal returns (uint256 balance) {
         balance = IERC20(token0).balanceOf(address(this));
     }
 
     function balance1() internal returns (uint256 balance) {
         balance = IERC20(token1).balanceOf(address(this));
+    }
+
+    function _blockTimestamp() internal view returns (uint32 timestamp) {
+        timestamp = uint32(block.timestamp);
     }
 
 }
