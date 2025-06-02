@@ -88,27 +88,41 @@ contract UniswapV3PoolTest is Test {
                 expectedAmount1,
                 "incorrect token1 deposited amount"
             );
-            ////////
+            // we expect specific precalculated amount
             assertEq(token0.balanceOf(address(pool)), expectedAmount0);
             assertEq(token1.balanceOf(address(pool)), expectedAmount1);
 
-            
-       
+            // we need to check the position the pool created for us:: keys in positions mapping is a has
+            bytes32 positionKey = keccak256(
+                abi.encodePacked(address(this), params.lowerTick, params.upperTick)
+            );
+            uint128 posLiquidity = pool.positions(positionKey);
+                assertEq(posLiquidity, params.liquidity);
+
+            // Next, come the ticks. Again, it’s straightforward:
+            (bool tickInitialized, uint128 tickLiquidity) = pool.ticks(
+                params.lowerTick
+            );
+                assertTrue(tickInitialized);
+                assertEq(tickLiquidity, params.liquidity);
+            (tickInitialized, tickLiquidity) = pool.ticks(params.upperTick);
+                assertTrue(tickInitialized);
+                assertEq(tickLiquidity, params.liquidity);
+            // And finally, √p and L
+            (uint160 sqrtPriceX96, int24 tick) = pool.slot0();
+                assertEq(
+                    sqrtPriceX96,
+                    5602277097478614198912276234240,
+                    "invalid current sqrtP"
+                );
+                assertEq(tick, 85176, "invalid current tick");
+                assertEq(
+                    pool.liquidity(),
+                    1517882343751509868544,
+                    "invalid current liquidity"
+                );
+
         }
-        /*
-         //
-        
-        //
-        (bool tickInitialized, uint128 tickLiquidity) = pool.ticks(
-            params.lowerTick
-        );
-        assertTrue(tickInitialized);
-        assertEq(tickLiquidity, params.liquidity);
-        //
-        (tickInitialized, tickLiquidity) = pool.ticks(params.upperTick);
-        assertTrue(tickInitialized);
-        assertEq(tickLiquidity, params.liquidity);
-        */
 
 
 
