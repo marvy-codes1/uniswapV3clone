@@ -13,6 +13,8 @@ contract UniswapV3PoolTest is Test {
     UniswapV3Pool pool;
 
     bool public shouldTransferInCallback;
+    bool public transferInSwapCallback;
+    bool public transferInMintCallback;
 
     struct TestCaseParams {
         uint256 wethBalance;
@@ -59,6 +61,49 @@ contract UniswapV3PoolTest is Test {
             );
         }
         
+    }
+
+    function testSwapBuyEth() public {
+        TestCaseParams memory params = TestCaseParams({
+            wethBalance: 1 ether,
+            usdcBalance: 5000 ether,
+            currentTick: 85176,
+            lowerTick: 84222,
+            upperTick: 86129,
+            liquidity: 1517882343751509868544,
+            currentSqrtP: 5602277097478614198912276234240,
+            transferInMintCallback: true,
+            transferInSwapCallback: true,
+            shouldTransferInCallback: true,
+            mintLiqudity: true
+        });
+        (uint256 poolBalance0, uint256 poolBalance1) = setupTestCase(params);
+        // to make test swap we need
+        
+        token1.mint(address(this), 42 ether);
+        uint256 userBalance0Before = token0.balanceOf(address(this));
+        (int256 amount0Delta, int256 amount1Delta) = pool.swap(address(this));
+        assertEq(amount0Delta, -0.008396714242162444 ether, "invalid ETH out");
+        assertEq(amount1Delta, 42 ether, "invalid USDC in");
+
+        // amount of tokens used in the swap
+        assertEq(amount0Delta, -0.008396714242162444 ether, "invalid ETH out");
+        assertEq(amount1Delta, 42 ether, "invalid USDC in");
+
+        // tokens transfered from the caller
+        assertEq(token0.balanceOf(address(this)), uint256(userBalance0Before - uint256(-amount0Delta)), "invalid user ETH balance");
+
+        assertEq(token1.balanceOf(address(this)), 0, "invalid user USDC balance" );
+
+        // tranfered to the contract
+        assertEq(token0.balanceOf(address(pool)), uint256(int256(poolBalance0) + amount0Delta), "invalid pool ETH balance" );
+        assertEq(token1.balanceOf(address(pool)), uint256(int256(poolBalance1) + amount1Delta), "invalid pool USDC balance");
+
+        // swapping here does not change the liquidity
+        (uint160 sqrtPriceX96, int24 tick) = pool.slot0();
+        assertEq(sqrtPriceX96, 5604469350942327889444743441197, "invalid current sqrtP");
+        assertEq(tick, 85184, "invalid current tick");
+        assertEq(pool.liquidity(), 1517882343751509868544, "invalid current liquidity");
     }
 
         function testMintSuccess() public {
@@ -127,11 +172,23 @@ contract UniswapV3PoolTest is Test {
 
 
     function uniswapV3MintCallback(uint256 amount0, uint256 amount1) public {
-        if (shouldTransferInCallback) {
+        if (transferInMintCallback) {
             token0.transfer(msg.sender, amount0);
             token1.transfer(msg.sender, amount1);
         }
     }
+
+    // amounts during a swap can be positive and negative(taken from the pool) we only need the callback amount
+    function uniswapV3SwapCallback(int256 amount0, int256 amount1) public {
+        if (amount0 > 0 && transferInSwapCallback) {
+            token0.transfer(msg.sender, uint256(amount0));
+        }
+
+        if (amount1 > 0 && transferInSwapCallback) {
+            token1.transfer(msg.sender, uint256(amount1));
+        }
+    }
+
 
 
 }
