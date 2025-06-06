@@ -17,13 +17,14 @@ import "./interfaces/IUniswapV3SwapCallback.sol";
 import "./lib/Position.sol";
 // import "./lib/SwapMath.sol";
 import "./lib/Tick.sol";
-// import "./lib/TickBitmap.sol";
+import "./lib/TickBitmap.sol";
 // import "./lib/TickMath.sol";
 
 contract UniswapV3Pool {
     using Tick for mapping(int24 => Tick.Info);
     using Position for mapping(bytes32 => Position.Info);
     using Position for Position.Info;
+    using TickBitmap for mapping(int16 => uint256);
 
     int24 internal constant MIN_TICK = -887272;
     int24 internal constant MAX_TICK = -MIN_TICK;
@@ -52,12 +53,13 @@ contract UniswapV3Pool {
     uint128 public liquidity;
 
    
-
     // Ticks info
     mapping(int24 => Tick.Info) public ticks;
     // Positions info
     // bytes32 is a keccak256 storage of the values in the position, always constant
     mapping(bytes32 => Position.Info) public positions;
+    // Tick bitmap
+    mapping(int16 => uint256) public tickBitmap;
 
     // Errors
     error InvalidTickRange();
