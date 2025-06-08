@@ -33,6 +33,21 @@ contract UniswapV3Pool {
     address public immutable token0;
     address public immutable token1;
 
+    struct SwapState {
+        uint256 amountSpecifiedRemaining;
+        uint256 amountCalculated;
+        uint160 sqrtPriceX96;
+        int24 tick;
+    }
+
+    struct StepState {
+        uint160 sqrtPriceStartX96;
+        int24 nextTick;
+        uint160 sqrtPriceNextX96;
+        uint256 amountIn;
+        uint256 amountOut;
+    }
+
     // adding this so that the manager knows which tokens to mint or swap
     struct CallbackData {
         address token0;
@@ -113,7 +128,7 @@ contract UniswapV3Pool {
         upperTick > MAX_TICK
     ) revert InvalidTickRange();
 
-    if (amount == 0) revert ZeroLiquidity();
+       if (amount == 0) revert ZeroLiquidity();
 
 
         // updating the bitmaping
@@ -138,9 +153,30 @@ contract UniswapV3Pool {
         );
         position.update(amount);
 
-        amount0 = 0.998976618347425280 ether;
-        amount1 = 5000 ether;
-    
+        // updating amounts to be calcualted automatically instead of hardcoding
+        // amount0 = 0.998976618347425280 ether;
+        // amount1 = 5000 ether;
+
+        Slot0 memory slot0_ = slot0;
+        SwapState memory state = SwapState({
+            amountSpecifiedRemaining: amountSpecified,
+            amountCalculated: 0,
+            sqrtPriceX96: slot0_.sqrtPriceX96,
+            tick: slot0_.tick
+        });
+
+        amount0 = Math.calcAmount0Delta(
+            slot0_.sqrtPriceX96,
+            TickMath.getSqrtRatioAtTick(upperTick),
+            amount
+        );
+
+        amount1 = Math.calcAmount1Delta(
+            slot0_.sqrtPriceX96,
+            TickMath.getSqrtRatioAtTick(lowerTick),
+            amount
+        );
+        
         liquidity += uint128(amount);
 
         
@@ -165,7 +201,9 @@ contract UniswapV3Pool {
         emit Mint(msg.sender, owner, lowerTick, upperTick, amount, amount0, amount1);
         }
 
-        function swap(address recipient, bytes calldata data) public returns (int256 amount0, int256 amount1){
+        
+        // ZEROFORONE this variable if true we are going from token x to y and vice-versa
+        function swap(address recipient, bool zeroForOne, uint256 amountSpecified, bytes calldata data) public returns (int256 amount0, int256 amount1){
             int24 nextTick = 85184;
             uint160 nextPrice = 5604469350942327889444743441197;
             amount0 = -0.008396714242162444 ether;
