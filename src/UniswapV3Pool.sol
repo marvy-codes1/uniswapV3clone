@@ -12,7 +12,7 @@ import "./interfaces/IUniswapV3SwapCallback.sol";
 
 // import "./lib/FixedPoint128.sol";
 // import "./lib/LiquidityMath.sol";
-// import "./lib/Math.sol";
+import "./lib/Math.sol";
 // import "./lib/Oracle.sol";
 import "./lib/Position.sol";
 // import "./lib/SwapMath.sol";
@@ -115,8 +115,21 @@ contract UniswapV3Pool {
 
     if (amount == 0) revert ZeroLiquidity();
 
-        ticks.update(lowerTick, amount);
-        ticks.update(upperTick, amount);
+
+        // updating the bitmaping
+        bool flippedLower = ticks.update(lowerTick, amount);
+        bool flippedUpper = ticks.update(upperTick, amount);
+
+        if (flippedLower) {
+            tickBitmap.flipTick(lowerTick, 1);
+        }
+
+        if (flippedUpper) {
+            tickBitmap.flipTick(upperTick, 1);
+        }
+
+        // ticks.update(lowerTick, amount);
+        // ticks.update(upperTick, amount);
 
         Position.Info storage position = positions.get(
             owner,
@@ -129,6 +142,8 @@ contract UniswapV3Pool {
         amount1 = 5000 ether;
     
         liquidity += uint128(amount);
+
+        
 
         uint256 balance0Before;
         uint256 balance1Before;
