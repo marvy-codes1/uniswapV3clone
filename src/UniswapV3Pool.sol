@@ -158,12 +158,6 @@ contract UniswapV3Pool {
         // amount1 = 5000 ether;
 
         Slot0 memory slot0_ = slot0;
-        SwapState memory state = SwapState({
-            amountSpecifiedRemaining: amountSpecified,
-            amountCalculated: 0,
-            sqrtPriceX96: slot0_.sqrtPriceX96,
-            tick: slot0_.tick
-        });
 
         amount0 = Math.calcAmount0Delta(
             slot0_.sqrtPriceX96,
@@ -204,6 +198,35 @@ contract UniswapV3Pool {
         
         // ZEROFORONE this variable if true we are going from token x to y and vice-versa
         function swap(address recipient, bool zeroForOne, uint256 amountSpecified, bytes calldata data) public returns (int256 amount0, int256 amount1){
+            Slot0 memory slot0_ = slot0;
+            SwapState memory state = SwapState({
+                amountSpecifiedRemaining: amountSpecified,
+                amountCalculated: 0,
+                sqrtPriceX96: slot0_.sqrtPriceX96,
+                tick: slot0_.tick
+            });
+
+            // Before filling an order, we initialize a SwapState instance. We’ll loop until amountSpecifiedRemaining is 0
+            while (state.amountSpecifiedRemaining > 0) {
+                StepState memory step;
+                step.sqrtPriceStartX96 = state.sqrtPriceX96;
+                (step.nextTick, ) = tickBitmap.nextInitializedTickWithinOneWord(
+                    state.tick,
+                    1,
+                    zeroForOne
+                );
+                step.sqrtPriceNextX96 = TickMath.getSqrtRatioAtTick(step.nextTick);
+                (state.sqrtPriceX96, step.amountIn, step.amountOut) = SwapMath.computeSwapStep(
+                    state.sqrtPriceX96,
+                    step.sqrtPriceNextX96,
+                    liquidity,
+                    state.amountSpecifiedRemaining
+                );
+                state.amountSpecifiedRemaining -= step.amountIn;
+                state.amountCalculated += step.amountOut;
+                state.tick = TickMath.getTickAtSqrtRatio(state.sqrtPriceX96);
+            }
+            
             int24 nextTick = 85184;
             uint160 nextPrice = 5604469350942327889444743441197;
             amount0 = -0.008396714242162444 ether;
