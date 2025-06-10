@@ -82,7 +82,7 @@ library Math {
             }
         }
 
-        // If product overflows, use a less precise formula.
+        // If product overflows, use a less precise formula. it gets rid of the multiplication in the numerator
         return
             uint160(
                 divRoundingUp(numerator, (numerator / sqrtPriceX96) + amountIn)
