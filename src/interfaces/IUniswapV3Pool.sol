@@ -21,9 +21,9 @@ interface IUniswapV3Pool {
 
 //     function factory() external view returns (address);
 
-//     function token0() external view returns (address);
+    function token0() external view returns (address);
 
-//     function token1() external view returns (address);
+    function token1() external view returns (address);
 
 //     function tickSpacing() external view returns (uint24);
 
@@ -40,13 +40,13 @@ interface IUniswapV3Pool {
 //             uint128 tokensOwed1
 //         );
 
-//     function mint(
-//         address owner,
-//         int24 lowerTick,
-//         int24 upperTick,
-//         uint128 amount,
-//         bytes calldata data
-//     ) external returns (uint256 amount0, uint256 amount1);
+    function mint(
+        address owner,
+        int24 lowerTick,
+        int24 upperTick,
+        uint128 amount,
+        bytes calldata data
+    ) external returns (uint256 amount0, uint256 amount1);
 
 //     function burn(
 //         int24 lowerTick,
@@ -73,10 +73,11 @@ interface IUniswapV3Pool {
 
     function slot0() external view returns (uint160 sqrtPriceX96, int24 tick);
 
-    function swap(
+     function swap(
         address recipient,
         bool zeroForOne,
         uint256 amountSpecified,
+        uint160 sqrtPriceLimitX96,
         bytes calldata data
     ) external returns (int256, int256);
 }

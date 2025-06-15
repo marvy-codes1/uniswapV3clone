@@ -7,7 +7,6 @@ import "./interfaces/IERC20.sol";
 import "./interfaces/IUniswapV3FlashCallback.sol";
 import "./interfaces/IUniswapV3MintCallback.sol";
 import "./interfaces/IUniswapV3Pool.sol";
-import "./interfaces/IUniswapV3PoolDeployer.sol";
 import "./interfaces/IUniswapV3SwapCallback.sol";
 
 // import "./lib/FixedPoint128.sol";
@@ -79,6 +78,7 @@ contract UniswapV3Pool {
     mapping(int16 => uint256) public tickBitmap;
 
     // Errors
+    error AlreadyInitialized();
     error InsufficientInputAmount();
     error InvalidPriceLimit();
     error InvalidTickRange();
@@ -87,7 +87,7 @@ contract UniswapV3Pool {
 
     // Events
     event Flash(address indexed recipient, uint256 amount0, uint256 amount1);
-    
+
     event Mint(
         address indexed sender,
         address indexed owner,
@@ -226,7 +226,7 @@ contract UniswapV3Pool {
 
         
         // ZEROFORONE this variable if true we are going from token x to y and vice-versa
-        function swap(address recipient, bool zeroForOne, uint256 amountSpecified, bytes calldata data) public returns (int256 amount0, int256 amount1){
+        function swap(address recipient, bool zeroForOne, uint256 amountSpecified, uint160 sqrtPriceLimitX96, bytes calldata data) public returns (int256 amount0, int256 amount1){
             Slot0 memory slot0_ = slot0;
             SwapState memory state = SwapState({
                 amountSpecifiedRemaining: amountSpecified,
@@ -235,9 +235,17 @@ contract UniswapV3Pool {
                 tick: slot0_.tick,
                 liquidity: liquidity
             });
+            // Invalid price limit
+            if (
+                zeroForOne
+                    ? sqrtPriceLimitX96 > slot0_.sqrtPriceX96 ||
+                        sqrtPriceLimitX96 < TickMath.MIN_SQRT_RATIO
+                    : sqrtPriceLimitX96 < slot0_.sqrtPriceX96 &&
+                        sqrtPriceLimitX96 > TickMath.MAX_SQRT_RATIO
+            ) revert InvalidPriceLimit();
 
         // Before filling an order, we initialize a SwapState instance. We’ll loop until amountSpecifiedRemaining is 0
-        while (state.amountSpecifiedRemaining > 0) {
+        while (state.amountSpecifiedRemaining > 0 && state.sqrtPriceX96 != sqrtPriceLimitX96) {
             StepState memory step;
             step.sqrtPriceStartX96 = state.sqrtPriceX96;
             (step.nextTick, step.initialized ) = tickBitmap.nextInitializedTickWithinOneWord(
@@ -249,8 +257,16 @@ contract UniswapV3Pool {
             step.sqrtPriceNextX96 = TickMath.getSqrtRatioAtTick(step.nextTick);
             (state.sqrtPriceX96, step.amountIn, step.amountOut) = SwapMath.computeSwapStep(
                 state.sqrtPriceX96,
-                step.sqrtPriceNextX96,
-                liquidity,
+                // ensures no calc outside of sqrtPriceLimitX96
+                (
+                    zeroForOne
+                        ? step.sqrtPriceNextX96 < sqrtPriceLimitX96
+                        : step.sqrtPriceNextX96 > sqrtPriceLimitX96
+                )
+                    ? sqrtPriceLimitX96
+                    : step.sqrtPriceNextX96,
+
+                state.liquidity,
                 state.amountSpecifiedRemaining
             );
             state.amountSpecifiedRemaining -= step.amountIn;
