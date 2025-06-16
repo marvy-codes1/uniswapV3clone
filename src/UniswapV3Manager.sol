@@ -1,37 +1,38 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.14;
 
-import "../src/UniswapV3Pool.sol";
-import "../src/interfaces/IERC20.sol";
 import "./interfaces/IERC20.sol";
 import "./interfaces/IUniswapV3Pool.sol";
 import "./interfaces/IUniswapV3Manager.sol";
 import "./lib/LiquidityMath.sol";
+import "./lib/Path.sol";
+import "./lib/PoolAddress.sol";
 import "./lib/TickMath.sol";
 
-contract UniswapV3Manager {
-    error SlippageCheckFailed(uint256 amount0, uint256 amount1);
+contract UniswapV3Manager is IUniswapV3Manager {
+    using Path for bytes;
 
-    struct MintParams {
-        address poolAddress;
-        int24 lowerTick;
-        int24 upperTick;
-        uint256 amount0Desired;
-        uint256 amount1Desired;
-        uint256 amount0Min;
-        uint256 amount1Min;
+    error SlippageCheckFailed(uint256 amount0, uint256 amount1);
+    error TooLittleReceived(uint256 amountOut);
+
+    address public immutable factory;
+
+    constructor(address factory_) {
+        factory = factory_;
     }
 
-    function mint(
-        // address poolAddress_,
-        // int24 lowerTick,
-        // int24 upperTick,
-        // uint128 liquidity,
-        // bytes calldata data
-        MintParams calldata params
-    ) public returns (uint256 amount0, uint256 amount1) {
+    function mint(MintParams calldata params)
+        public
+        returns (uint256 amount0, uint256 amount1)
+    {
+        address poolAddress = PoolAddress.computeAddress(
+            factory,
+            params.tokenA,
+            params.tokenB,
+            params.tickSpacing
+        );
+        IUniswapV3Pool pool = IUniswapV3Pool(poolAddress);
 
-        IUniswapV3Pool pool = IUniswapV3Pool(params.poolAddress);
         (uint160 sqrtPriceX96, ) = pool.slot0();
         uint160 sqrtPriceLowerX96 = TickMath.getSqrtRatioAtTick(
             params.lowerTick
@@ -48,15 +49,6 @@ contract UniswapV3Manager {
             params.amount1Desired
         );
 
-
-        // UniswapV3Pool(poolAddress_).mint(
-        //     msg.sender,
-        //     lowerTick,
-        //     upperTick,
-        //     liquidity,
-        //     data
-        // );
-
         (amount0, amount1) = pool.mint(
             msg.sender,
             params.lowerTick,
@@ -68,25 +60,82 @@ contract UniswapV3Manager {
                     token1: pool.token1(),
                     payer: msg.sender
                 })
-        )
+            )
         );
 
         if (amount0 < params.amount0Min || amount1 < params.amount1Min)
             revert SlippageCheckFailed(amount0, amount1);
+    }
+
+    function swapSingle(SwapSingleParams calldata params)
+        public
+        returns (uint256 amountOut)
+    {
+        amountOut = _swap(
+            params.amountIn,
+            msg.sender,
+            params.sqrtPriceLimitX96,
+            SwapCallbackData({
+                path: abi.encodePacked(
+                    params.tokenIn,
+                    params.tickSpacing,
+                    params.tokenOut
+                ),
+                payer: msg.sender
+            })
+        );
+    }
+
+    function swap(SwapParams memory params) public returns (uint256 amountOut) {
+        address payer = msg.sender;
+        bool hasMultiplePools;
+
+        while (true) {
+            hasMultiplePools = params.path.hasMultiplePools();
+
+            params.amountIn = _swap(
+                params.amountIn,
+                hasMultiplePools ? address(this) : params.recipient,
+                0,
+                SwapCallbackData({
+                    path: params.path.getFirstPool(),
+                    payer: payer
+                })
+            );
+
+            if (hasMultiplePools) {
+                payer = address(this);
+                params.path = params.path.skipToken();
+            } else {
+                amountOut = params.amountIn;
+                break;
+            }
         }
 
-       function swap(
-        address poolAddress_,
-        bool zeroForOne,
-        uint256 amountSpecified,
+        if (amountOut < params.minAmountOut)
+            revert TooLittleReceived(amountOut);
+    }
+
+    function _swap(
+        uint256 amountIn,
+        address recipient,
         uint160 sqrtPriceLimitX96,
-        bytes calldata data
-    ) public returns (int256, int256) {
-        return
-            IUniswapV3Pool(poolAddress_).swap(
-                msg.sender,
+        SwapCallbackData memory data
+    ) internal returns (uint256 amountOut) {
+        (address tokenIn, address tokenOut, uint24 tickSpacing) = data
+            .path
+            .decodeFirstPool();
+
+        bool zeroForOne = tokenIn < tokenOut;
+
+        (int256 amount0, int256 amount1) = getPool(
+            tokenIn,
+            tokenOut,
+            tickSpacing
+        ).swap(
+                recipient,
                 zeroForOne,
-                amountSpecified,
+                amountIn,
                 sqrtPriceLimitX96 == 0
                     ? (
                         zeroForOne
@@ -94,31 +143,59 @@ contract UniswapV3Manager {
                             : TickMath.MAX_SQRT_RATIO - 1
                     )
                     : sqrtPriceLimitX96,
-                data
+                abi.encode(data)
             );
+
+        amountOut = uint256(-(zeroForOne ? amount1 : amount0));
     }
 
-    
-    function uniswapV3MintCallback(uint256 amount0, uint256 amount1, bytes calldata data) public {
-            UniswapV3Pool.CallbackData memory extra = abi.decode(
-                data,
-                (UniswapV3Pool.CallbackData)
-            );
-            IERC20(extra.token0).transferFrom(extra.payer, msg.sender, amount0);
-            IERC20(extra.token1).transferFrom(extra.payer, msg.sender, amount1);
+    function getPool(
+        address token0,
+        address token1,
+        uint24 tickSpacing
+    ) internal view returns (IUniswapV3Pool pool) {
+        (token0, token1) = token0 < token1
+            ? (token0, token1)
+            : (token1, token0);
+        pool = IUniswapV3Pool(
+            PoolAddress.computeAddress(factory, token0, token1, tickSpacing)
+        );
     }
 
-    // amounts during a swap can be positive and negative(taken from the pool) we only need the callback amount
-    function uniswapV3SwapCallback(int256 amount0, int256 amount1,  bytes calldata data) public {
-        UniswapV3Pool.CallbackData memory extra = abi.decode(
-                data,
-                (UniswapV3Pool.CallbackData)
+    function uniswapV3MintCallback(
+        uint256 amount0,
+        uint256 amount1,
+        bytes calldata data
+    ) public {
+        IUniswapV3Pool.CallbackData memory extra = abi.decode(
+            data,
+            (IUniswapV3Pool.CallbackData)
+        );
+
+        IERC20(extra.token0).transferFrom(extra.payer, msg.sender, amount0);
+        IERC20(extra.token1).transferFrom(extra.payer, msg.sender, amount1);
+    }
+
+    function uniswapV3SwapCallback(
+        int256 amount0,
+        int256 amount1,
+        bytes calldata data_
+    ) public {
+        SwapCallbackData memory data = abi.decode(data_, (SwapCallbackData));
+        (address tokenIn, address tokenOut, ) = data.path.decodeFirstPool();
+
+        bool zeroForOne = tokenIn < tokenOut;
+
+        int256 amount = zeroForOne ? amount0 : amount1;
+
+        if (data.payer == address(this)) {
+            IERC20(tokenIn).transfer(msg.sender, uint256(amount));
+        } else {
+            IERC20(tokenIn).transferFrom(
+                data.payer,
+                msg.sender,
+                uint256(amount)
             );
-        if (amount0 > 0) {
-            IERC20(extra.token0).transferFrom(extra.payer, msg.sender, uint256(amount0));
-        }
-        if (amount1 > 0) {
-           IERC20(extra.token1).transferFrom(extra.payer, msg.sender, uint256(amount1));
         }
     }
 }
