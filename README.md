@@ -2,7 +2,7 @@
 
 This repository contains my ground-up implementation of the core mechanics behind **Uniswap V3**, inspired by Jeiwan’s book and the original protocol design by Uniswap Labs.
 
-Rather than treating this as a tutorial exercise, I approached it as a protocol engineering and security study — rebuilding the system to deeply understand its mechanics, assumptions, and invariants.
+Rather than treating this as a tutorial exercise, I approached it as a protocol engineering and security study and rebuilding the system to deeply understand its mechanics, assumptions, and invariants.
 
 ---
 
