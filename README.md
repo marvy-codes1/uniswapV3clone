@@ -1,66 +1,51 @@
-## Foundry
+# 🧠 Uniswap V3 Clone — Deep Dive Implementation
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+This repository contains my ground-up implementation of the core mechanics behind **Uniswap V3**, inspired by Jeiwan’s book and the original protocol design by Uniswap Labs.
 
-Foundry consists of:
+Rather than treating this as a tutorial exercise, I approached it as a protocol engineering and security study — rebuilding the system to deeply understand its mechanics, assumptions, and invariants.
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+---
 
-## Documentation
+## 🔍 What This Project Demonstrates
 
-https://book.getfoundry.sh/
+- Implementation of **concentrated liquidity**
+- Tick math and price movement logic
+- Liquidity provisioning within custom price ranges
+- Swap execution across multiple ticks
+- Fee growth accounting
+- Precision handling using fixed-point math
+- Edge-case handling around price boundaries
 
-## Usage
+---
 
-### Build
+## 🎯 Why I Built This
 
-```shell
-$ forge build
-```
+I didn’t build this just to “follow a tutorial.”
 
-### Test
+I built this to:
 
-```shell
-$ forge test
-```
+- Understand AMM mechanics at protocol depth  
+- Break down how V3 achieves capital efficiency  
+- Explore invariant preservation under complex state transitions  
+- Strengthen my smart contract security intuition around liquidity math  
 
-### Format
+This project required reasoning through:
 
-```shell
-$ forge fmt
-```
+- Price ↔ Tick conversions  
+- Liquidity delta calculations  
+- Swap step computation  
+- Rounding errors and precision loss  
+- State transitions across multiple ticks  
 
-### Gas Snapshots
+---
 
-```shell
-$ forge snapshot
-```
+## 🧪 Testing & Verification
 
-### Anvil
+I wrote tests to validate:
 
-```shell
-$ anvil
-```
+- Swap correctness across liquidity ranges  
+- Liquidity accounting invariants  
+- Fee accumulation behavior  
+- Boundary condition handling  
 
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+The goal was not just functionality, but correctness under edge conditions — particularly where precision and state transitions interact.
