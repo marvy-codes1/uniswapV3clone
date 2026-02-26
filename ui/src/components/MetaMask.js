@@ -8,7 +8,7 @@ const chainIdToChain = (chainId) => {
       return 'Mainnet';
 
     case '0x7a69':
-      return 'Anvil'
+      return 'Uniswap V3 Demo'
 
     default:
       return 'unknown chain';

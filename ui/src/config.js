@@ -19,7 +19,7 @@ const localConfig = {
 };
 
 const productionConfig = {
-  network: 'anvil',
+  network: 'Uniswap V3 Demo',
   chainId: 31337,
   rpcUrl: process.env.REACT_APP_RPC_URL || 'https://rush-tied-normal-tommy.trycloudflare.com',
   wethAddress: '0x5FbDB2315678afecb367f032d93F642f64180aa3',
