@@ -2,3 +2,6 @@ broadcast/
 cache/
 out/
 __pycache__
+
+# Local Netlify folder
+.netlify
